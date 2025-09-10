@@ -2,7 +2,6 @@
 **Notebook**: `Cross_Domain_Image_Translation_.ipynb`  
 **Task**: Unpaired image-to-image translation on **apple2orange** using **CycleGAN** implemented from scratch in **PyTorch**.
 
-> This README is specific to the CycleGAN notebook and intentionally excludes CNN/foundations content.
 
 ---
 
