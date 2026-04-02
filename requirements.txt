@@ -4,3 +4,8 @@ numpy
 pillow
 matplotlib
 tqdm
+pyyaml
+mlflow
+fastapi
+uvicorn
+python-multipart

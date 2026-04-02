@@ -1,0 +1,19 @@
+services:
+  cyclegan-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cyclegan-api
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_DATASET_NAME: apple2orange
+      MODEL_EXPERIMENT_NAME: apple2orange
+      MODEL_CHECKPOINT_ROOT: checkpoints/pytorch
+      MODEL_OUTPUT_ROOT: outputs
+      MODEL_IMAGE_SIZE: 256
+      MODEL_DEVICE: cpu
+    volumes:
+      - ./checkpoints:/app/checkpoints
+      - ./outputs:/app/outputs
+    restart: unless-stopped

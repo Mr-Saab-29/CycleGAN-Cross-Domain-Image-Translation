@@ -39,8 +39,8 @@ def main() -> None:
     except ModuleNotFoundError as exc:
         raise SystemExit("torch is required to train the model. Install dependencies with `pip install -r requirements.txt`.") from exc
 
-    from cyclegan.config import CycleGANConfig
-    from cyclegan.trainer import CycleGANTrainer, config_to_dict
+    from cyclegan.config import CycleGANConfig, config_to_dict
+    from cyclegan.trainer import CycleGANTrainer
 
     default_device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Python: {sys.executable}")

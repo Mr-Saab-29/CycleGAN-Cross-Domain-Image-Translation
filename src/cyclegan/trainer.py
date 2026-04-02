@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict
-from pathlib import Path
 import random
 import time
 
@@ -10,10 +8,12 @@ from torch.optim.lr_scheduler import LambdaLR
 from tqdm import tqdm
 
 from .checkpoints import load_checkpoint, save_checkpoint
-from .config import CycleGANConfig
+from .config import CycleGANConfig, config_to_dict
 from .data import load_datasets
+from .evaluation import evaluate_generators
 from .losses import cycle_consistency_loss, discriminator_loss, generator_loss, identity_loss
 from .models import Discriminator, GeneratorResNet, weights_init_normal
+from .tracking import ExperimentTracker
 from .utils import append_metrics_row, save_epoch_preview_grid, set_seed
 
 
@@ -51,6 +51,12 @@ class CycleGANTrainer:
         self.datasets = load_datasets(config)
         self.fake_x_buffer = ReplayBuffer(config.replay_buffer_size)
         self.fake_y_buffer = ReplayBuffer(config.replay_buffer_size)
+        self.tracker = ExperimentTracker(
+            enabled=config.tracking_enabled,
+            tracking_uri=config.tracking_uri,
+            experiment_name=config.tracking_experiment,
+            run_name=config.run_name,
+        )
 
         self.generator_x_to_y = GeneratorResNet(
             input_channels=config.channels,
@@ -92,6 +98,7 @@ class CycleGANTrainer:
                 optimizers=self.optimizers,
                 device=config.device,
             ) + 1
+        self.tracker.log_params(config_to_dict(config))
 
     def _lambda_lr(self, epoch: int) -> float:
         decay_start_epoch = self.config.epochs // 2
@@ -122,32 +129,46 @@ class CycleGANTrainer:
     def train(self) -> None:
         preview_pairs = self._preview_pairs()
 
-        for epoch in range(self.start_epoch, self.config.epochs + 1):
-            epoch_start = time.time()
-            metrics = self._train_one_epoch(epoch)
-            append_metrics_row(self.config.metrics_path, metrics)
-            self._save_epoch_preview(epoch, preview_pairs)
+        try:
+            for epoch in range(self.start_epoch, self.config.epochs + 1):
+                epoch_start = time.time()
+                metrics = self._train_one_epoch(epoch)
+                append_metrics_row(self.config.metrics_path, metrics)
+                self.tracker.log_metrics({k: float(v) for k, v in metrics.items() if k != "epoch"}, step=epoch)
+                self._save_epoch_preview(epoch, preview_pairs)
 
-            if epoch % self.config.save_every_n_epochs == 0 or epoch == self.config.epochs:
-                save_checkpoint(
-                    self.config.checkpoint_path,
-                    epoch=epoch,
-                    generators=self.generators,
-                    discriminators=self.discriminators,
-                    optimizers=self.optimizers,
+                if epoch % self.config.save_every_n_epochs == 0 or epoch == self.config.epochs:
+                    save_checkpoint(
+                        self.config.checkpoint_path,
+                        epoch=epoch,
+                        generators=self.generators,
+                        discriminators=self.discriminators,
+                        optimizers=self.optimizers,
+                    )
+                    self.tracker.log_artifact(self.config.checkpoint_path, artifact_path="checkpoints")
+
+                for scheduler in self.schedulers.values():
+                    scheduler.step()
+
+                duration = time.time() - epoch_start
+                print(
+                    f"Epoch {epoch}/{self.config.epochs} | "
+                    f"G_XtoY={metrics['g_x_to_y']:.4f} | G_YtoX={metrics['g_y_to_x']:.4f} | "
+                    f"Dx={metrics['d_x']:.4f} | Dy={metrics['d_y']:.4f} | "
+                    f"cycle={metrics['cycle']:.4f} | identity={metrics['identity']:.4f} | "
+                    f"{duration:.1f}s"
                 )
 
-            for scheduler in self.schedulers.values():
-                scheduler.step()
-
-            duration = time.time() - epoch_start
-            print(
-                f"Epoch {epoch}/{self.config.epochs} | "
-                f"G_XtoY={metrics['g_x_to_y']:.4f} | G_YtoX={metrics['g_y_to_x']:.4f} | "
-                f"Dx={metrics['d_x']:.4f} | Dy={metrics['d_y']:.4f} | "
-                f"cycle={metrics['cycle']:.4f} | identity={metrics['identity']:.4f} | "
-                f"{duration:.1f}s"
+            evaluation_metrics, preview_path = evaluate_generators(
+                self.generator_x_to_y,
+                self.generator_y_to_x,
+                self.config,
             )
+            self.tracker.log_metrics(evaluation_metrics, step=self.config.epochs)
+            self.tracker.log_artifact(preview_path, artifact_path="evaluation")
+            self.tracker.log_artifact(self.config.evaluation_dir / "report.json", artifact_path="evaluation")
+        finally:
+            self.tracker.end()
 
     def _train_one_epoch(self, epoch: int) -> dict[str, float | int]:
         self.generator_x_to_y.train()
@@ -220,11 +241,3 @@ class CycleGANTrainer:
             )
 
         return {"epoch": epoch, **{name: value / steps for name, value in totals.items()}}
-
-
-def config_to_dict(config: CycleGANConfig) -> dict[str, object]:
-    raw = asdict(config)
-    for key, value in raw.items():
-        if isinstance(value, Path):
-            raw[key] = str(value)
-    return raw

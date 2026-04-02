@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 
 @dataclass
@@ -46,6 +49,10 @@ class CycleGANConfig:
     checkpoint_name: str = "training-checkpoint.pt"
     sample_dirname: str = "samples"
     inference_dirname: str = "inference"
+    evaluation_dirname: str = "evaluation"
+    tracking_uri: str = "mlruns"
+    tracking_experiment: str = "cyclegan"
+    tracking_enabled: bool = True
     extra: dict[str, str] = field(default_factory=dict)
 
     @property
@@ -84,6 +91,10 @@ class CycleGANConfig:
     def inference_dir(self) -> Path:
         return self.output_dir / self.inference_dirname
 
+    @property
+    def evaluation_dir(self) -> Path:
+        return self.output_dir / self.evaluation_dirname
+
     def ensure_dirs(self) -> None:
         for path in (
             self.checkpoint_dir,
@@ -91,5 +102,21 @@ class CycleGANConfig:
             self.logs_dir,
             self.train_sample_dir,
             self.inference_dir,
+            self.evaluation_dir,
         ):
             path.mkdir(parents=True, exist_ok=True)
+
+
+def config_to_dict(config: CycleGANConfig) -> dict[str, Any]:
+    raw = asdict(config)
+    for key, value in raw.items():
+        if isinstance(value, Path):
+            raw[key] = str(value)
+    return raw
+
+
+def load_config_from_yaml(path: Path) -> CycleGANConfig:
+    content = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    path_fields = {"data_root", "output_root", "checkpoint_root", "logs_root"}
+    normalized = {key: Path(value) if key in path_fields else value for key, value in content.items()}
+    return CycleGANConfig(**normalized)
