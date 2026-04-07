@@ -20,6 +20,7 @@ dependencies = [
   "fastapi",
   "uvicorn",
   "python-multipart",
+  "streamlit",
 ]
 
 [tool.setuptools]

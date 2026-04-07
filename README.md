@@ -107,12 +107,63 @@ python scripts/infer_image.py --dataset-name apple2orange --direction x2y --inpu
 
 Use `--direction y2x` for the reverse translation.
 
+### Streamlit UI
+
+Launch a simple browser UI for uploading your own image:
+
+```bash
+python -m streamlit run app/streamlit_app.py
+```
+
+If you use VS Code `MINGW64` / Git Bash:
+
+```bash
+PORT=8501 ./tools/run_streamlit.sh
+```
+
+If you use PowerShell:
+
+```powershell
+.\tools\run_streamlit.ps1 -Port 8501
+```
+
+The Streamlit app lets you:
+
+- upload a local image
+- choose `x2y` or `y2x`
+- select dataset name, experiment name, image size, and device
+- download the translated result
+
 ## API Serving
 
 Start the FastAPI service locally:
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Or use the repo [Makefile](c:/Users/sabar/Desktop/Documents/Personal/Image%20Translation/CycleGAN-Cross-Domain-Image-Translation/Makefile):
+
+```bash
+make api
+```
+
+With overrides:
+
+```bash
+make api DEVICE=cuda EXPERIMENT=apple2orange HOST=127.0.0.1 PORT=8000
+```
+
+On Windows PowerShell, `make` is often unavailable. Use the PowerShell runner instead:
+
+```powershell
+.\tools\run_api.ps1 -Device cuda -Experiment apple2orange -Host 127.0.0.1 -Port 8000
+```
+
+If you use VS Code `MINGW64` / Git Bash, use the Bash runner instead:
+
+```bash
+DEVICE=cuda EXPERIMENT=apple2orange HOST=127.0.0.1 PORT=8000 ./tools/run_api.sh
 ```
 
 Set model settings with environment variables if needed:
@@ -127,7 +178,10 @@ set MODEL_DEVICE=cuda
 
 API endpoints:
 
+- `GET /`
 - `GET /health`
+- `GET /docs`
+- `GET /demo`
 - `POST /predict?direction=x2y`
 - `POST /predict?direction=y2x`
 
@@ -136,6 +190,13 @@ Example request:
 ```bash
 curl -X POST "http://localhost:8000/predict?direction=x2y" -F "file=@input.jpg" --output translated.png
 ```
+
+Useful browser URLs:
+
+- `http://127.0.0.1:8000/`
+- `http://127.0.0.1:8000/health`
+- `http://127.0.0.1:8000/docs`
+- `http://127.0.0.1:8000/demo`
 
 ## Docker
 
@@ -174,3 +235,5 @@ If you trained under a different run name, update `MODEL_EXPERIMENT_NAME` in the
 - The project supports other unpaired datasets with the same folder layout: `trainA`, `trainB`, `testA`, `testB`.
 - For long local GPU training runs, `batch_size=1` and `image_size=256` are the intended defaults.
 - MLflow tracking is optional. If it is not installed, training still runs, but experiment tracking is skipped.
+- Windows users can use the scripts under `tools/` instead of `make`.
+- Git Bash / `MINGW64` users should prefer the `.sh` scripts under `tools/`.
